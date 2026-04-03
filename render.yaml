@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: ai-document-analysis-api
+    runtime: docker
+    plan: free
