@@ -1,63 +1,111 @@
 # AI Document Analysis API
 
-An async document-processing API that extracts text from `PDF`, `DOCX`, and image files, then returns:
+Production-style document analysis API for the GUVI Hackathon AI-Powered Document Analysis & Extraction track.
 
-- document text
-- concise summary
+The service accepts `PDF`, `DOCX`, and image files, extracts readable text, then returns:
+- summary
 - named entities
 - sentiment
-- keywords
+- OCR-backed extraction for image documents
 
-The service is designed so you can plug in a stronger AI model for better scoring while still keeping a no-hardcoded local fallback.
+## Live Project
+
+- Live URL: `https://ai-document-analysis-wh9b.onrender.com`
+- API Docs: `https://ai-document-analysis-wh9b.onrender.com/docs`
+- GitHub Repo: `https://github.com/Waggepradeep/ai-document-analysis`
 
 ## Features
 
-- Multi-format support: PDF, DOCX, PNG, JPG, JPEG, TIFF, BMP, WEBP
-- OCR for image-based documents using Tesseract
+- Multi-format support: `PDF`, `DOCX`, `PNG`, `JPG`, `JPEG`, `TIFF`, `BMP`, `WEBP`
+- OCR for images using Tesseract
 - Layout-aware PDF extraction with `pdfplumber`
-- AI-powered analysis through OpenAI when `OPENAI_API_KEY` is set
-- Deterministic fallback summarization, entity extraction, and sentiment analysis when no API key is available
-- Async FastAPI endpoint ready for Docker or Render deployment
+- AI-powered summary, entity extraction, and sentiment analysis using Gemini
+- Rule-based fallback if the AI provider is unavailable
+- Spec-compatible base64 endpoint for hackathon evaluation
+- Rich multipart endpoint for debugging and manual testing
+- API-key protected endpoints
 
-## API
+## Architecture Overview
+
+The project is organized into a small service-oriented FastAPI backend:
+
+- [app/main.py](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\app\main.py)
+  Defines the FastAPI app, root route, and health route.
+- [documents.py](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\app\api\routes\documents.py)
+  Exposes the two API routes.
+- [document_processor.py](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\app\services\document_processor.py)
+  Handles input validation, extraction, analysis, and spec-response formatting.
+- [analysis.py](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\app\services\analysis.py)
+  Runs Gemini-backed document analysis and applies small entity cleanup rules.
+- [extractors](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\app\services\extractors)
+  Contains separate extractors for PDF, DOCX, and image files.
+
+## Tech Stack
+
+- Backend: FastAPI
+- Runtime: Python 3.12
+- OCR: Tesseract + `pytesseract`
+- PDF extraction: `pdfplumber`, `pypdf`
+- DOCX extraction: `python-docx`
+- AI model: Gemini `gemini-2.5-flash`
+- Deployment: Docker + Render
+- Testing: `pytest`
+
+## API Endpoints
 
 ### `POST /api/document-analyze`
 
-Primary spec-compatible endpoint. Send JSON with `fileName`, `fileType`, and `fileBase64`, plus the `x-api-key` header.
-`fileType` can be either `pdf`, `docx`, `image` or a MIME type such as `application/pdf`.
+Primary hackathon/spec endpoint.
 
-Example request:
+Request:
+- header: `x-api-key`
+- JSON body:
 
 ```json
 {
   "fileName": "sample.pdf",
-  "fileType": "application/pdf",
+  "fileType": "pdf",
   "fileBase64": "BASE64_ENCODED_FILE_CONTENT"
 }
 ```
 
-Example response:
+Response:
 
 ```json
 {
   "status": "success",
   "fileName": "sample.pdf",
-  "summary": "Concise factual summary...",
+  "summary": "Short summary...",
   "entities": {
     "names": ["John Doe"],
-    "dates": ["Jan 10, 2026"],
-    "organizations": ["Acme Corporation"],
-    "amounts": ["$450"]
+    "dates": ["2026-04-03"],
+    "organizations": ["Example University"],
+    "amounts": ["$500"]
   },
-  "sentiment": "Neutral"
+  "sentiment": "Positive"
 }
 ```
 
 ### `POST /api/v1/documents/analyze`
 
-Compatibility endpoint for multipart uploads with a `file` field. This returns a richer debugging response and also requires `x-api-key`.
+Rich multipart endpoint for debugging and testing.
 
-## Local setup
+Request:
+- header: `x-api-key`
+- form-data:
+  - `file`
+
+This route returns extracted text plus a richer analysis payload, including locations, emails, phone numbers, and confidence.
+
+### `GET /`
+
+Simple root route for deployed environments.
+
+### `GET /health`
+
+Health check.
+
+## Local Setup
 
 ```bash
 python -m venv .venv
@@ -67,26 +115,30 @@ copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Health check:
+Useful URLs:
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/docs`
 
-```bash
-curl http://localhost:8000/health
+## Environment Variables
+
+```env
+APP_NAME=AI Document Analysis API
+APP_ENV=development
+API_KEY=your-secret-api-key
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_TIMEOUT_SECONDS=30
+TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
+MAX_FILE_SIZE_MB=20
 ```
 
-Swagger UI:
-
-```text
-http://localhost:8000/docs
-```
-
-## Environment variables
-
-- `OPENAI_API_KEY`: optional, enables LLM analysis
-- `API_KEY`: required request header value for `x-api-key`
-- `OPENAI_MODEL`: defaults to `gpt-4.1-mini`
-- `OPENAI_TIMEOUT_SECONDS`: timeout for AI calls before falling back safely
-- `TESSERACT_CMD`: optional custom path to the Tesseract binary
-- `MAX_FILE_SIZE_MB`: upload limit
+Notes:
+- `API_KEY` is required by both API routes through the `x-api-key` header.
+- `GEMINI_API_KEY` powers the AI analysis path.
+- `TESSERACT_CMD` is mainly needed for local Windows development. In Docker/Render, Tesseract is installed in the container.
 
 ## Deployment
 
@@ -99,16 +151,51 @@ docker run -p 8000:8000 --env-file .env ai-document-analysis-api
 
 ### Render
 
-This repo includes a `render.yaml` so it can be deployed as a Docker web service. Set `OPENAI_API_KEY` and any other env vars in the Render dashboard.
+This repository includes:
+- [Dockerfile](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\Dockerfile)
+- [render.yaml](c:\Users\wagge\OneDrive\Desktop\ai-document-analysis-api\render.yaml)
 
-## Notes for submission
-
-- Public deployment URL: deploy this service to Render, Railway, Fly.io, or similar
-- API key: expose your deployed endpoint or protected key according to the challenge instructions
-- GitHub repository: initialize git and push this folder to a new repository
+Deployment steps:
+1. Connect the GitHub repository in Render.
+2. Deploy as a Docker web service.
+3. Set environment variables in Render dashboard.
+4. Use the public service URL for hackathon submission.
 
 ## Testing
 
 ```bash
 pytest
 ```
+
+Current local verification:
+- API routes working
+- OCR tested on image sample
+- PDF, DOCX, and image flows validated
+- Endpoint tester passed successfully
+
+## AI Tools Used
+
+This project uses AI in two ways:
+
+- Gemini API
+  Used for document summarization, entity extraction, and sentiment analysis.
+- AI coding assistance during development
+  Used to help structure implementation, refine prompts, improve entity cleanup, and prepare documentation.
+
+## Known Limitations
+
+- Entity extraction depends on OCR/text quality for scanned or noisy image inputs.
+- Some documents with very generic wording may return fewer named organizations if the text does not contain strong named entities.
+- Rule-based fallback is less accurate than the Gemini path.
+- Extremely long documents are truncated before LLM analysis to keep inference practical and stable.
+- The spec endpoint intentionally returns a reduced response shape compared to the richer multipart route.
+
+## Submission Notes
+
+For the hackathon submission, use:
+- Live URL: `https://ai-document-analysis-wh9b.onrender.com`
+- Endpoint URL: `https://ai-document-analysis-wh9b.onrender.com/api/document-analyze`
+- API key header: `x-api-key`
+- GitHub repo: `https://github.com/Waggepradeep/ai-document-analysis`
+
+The project was built for the `AI-Powered Document Analysis & Extraction` problem statement and tested against PDF, DOCX, and image inputs.
