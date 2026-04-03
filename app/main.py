@@ -11,3 +11,12 @@ app.include_router(document_router)
 @app.get("/health")
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
+
+
+@app.get("/")
+async def root() -> dict[str, str]:
+    return {
+        "message": "AI Document Analysis API is running",
+        "docs": "/docs",
+        "health": "/health",
+    }

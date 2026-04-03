@@ -8,10 +8,11 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.config import get_settings
 from app.main import app
 
 client = TestClient(app)
-API_HEADERS = {"x-api-key": "your-secret-api-key"}
+API_HEADERS = {"x-api-key": get_settings().api_key}
 
 
 def test_healthcheck() -> None:
